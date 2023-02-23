@@ -1,0 +1,142 @@
+USE [Cyclistic-Google-Capstone]
+GO
+
+SELECT [ride_id]
+      ,[rideable_type]
+      ,[started_at]
+      ,[ended_at]
+      ,[start_station_name]
+      ,[start_station_id]
+      ,[end_station_name]
+      ,[end_station_id]
+      ,[start_lat]
+      ,[start_lng]
+      ,[end_lat]
+      ,[end_lng]
+      ,[member_casual]
+      ,[ride_length]
+      ,[weekday]
+  FROM [dbo].[YDateNoDuplicates]
+
+GO
+
+--PROCESS--
+
+--added column for ride length without year
+ALTER TABLE	YDateNoDuplicates
+ADD ride_length_hms AS CAST(ride_length AS time)
+
+--deleting rows with 0 second ride times
+DELETE FROM YDateNoDuplicates WHERE ride_length_hms = '00:00:00.0000000'
+
+--deleting rows with less than 1 min and more than 23 hours second ride times
+DELETE
+FROM YDateNoDuplicates
+WHERE ride_length_hms <= '00:01:00.0000000' OR ride_length_hms >= '23:00:00.0000000' 
+
+--deleting rows with NULL ride lengths
+DELETE FROM YDateNoDuplicates WHERE ride_length_hms IS NULL
+
+--to look at the data
+select COUNT (ride_id)
+from YDateNoDuplicates
+
+--members don't use docked bikes
+SELECT count (rideable_type), rideable_type, member_casual
+FROM YDateNoDuplicates
+group by rideable_type, member_casual
+
+select Count(*)
+from YDateNoDuplicates
+where rideable_type = 'docked_bike' AND member_casual = 'member'
+
+--compare how many non-null vs null
+SELECT SUM(CASE WHEN start_station_name is null THEN 1 ELSE 0 END) 
+AS [Number Of Null Values] 
+    , COUNT(start_station_name) AS [Number Of Non-Null Values] 
+    FROM YDateNoDuplicates
+
+SELECT SUM(CASE WHEN end_station_name is null THEN 1 ELSE 0 END) 
+AS [Number Of Null Values] 
+    , COUNT(end_station_name) AS [Number Of Non-Null Values] 
+    FROM YDateNoDuplicates
+
+--ANALYZE--
+
+--ride length by member type
+SELECT member_casual, AVG(CAST((ended_at - started_at) AS float)) AS avg_ride_length
+FROM YDateNoDuplicates
+GROUP BY member_casual
+
+--difference between no of riders
+SELECT
+    (SELECT COUNT(member_casual) FROM YDateNoDuplicates WHERE member_casual = 'member')
+  - (SELECT COUNT(member_casual) FROM YDateNoDuplicates WHERE member_casual = 'casual') 
+FROM YDateNoDuplicates
+
+
+--MONTH BASED ANALYSIS
+--added month column
+ALTER TABLE YDateNoDuplicates
+DROP COLUMN IF EXISTS month
+ALTER TABLE	YDateNoDuplicates
+ADD month AS MONTH(started_at)
+
+--number of:
+--rides per month
+SELECT DISTINCT month, COUNT(ride_id) AS no_of_rides
+FROM YDateNoDuplicates
+GROUP BY month
+ORDER BY month
+
+--riders by member type
+SELECT COUNT(ride_id) AS no_of_rides, member_casual
+FROM YDateNoDuplicates
+GROUP BY member_casual
+
+--riders by member type per month
+SELECT month, COUNT(ride_id) AS no_of_rides, member_casual
+FROM YDateNoDuplicates
+GROUP BY month, member_casual 
+ORDER BY no_of_rides DESC
+
+--average
+--ride length per month
+SELECT month, AVG(CAST((ended_at - started_at) AS float)) AS avg_ride_length
+FROM YDateNoDuplicates
+GROUP BY month
+ORDER BY avg_ride_length DESC
+
+--ride length by member type per month
+SELECT month, member_casual, AVG(CAST((ended_at - started_at) AS float)) AS avg_ride_length
+FROM YDateNoDuplicates
+GROUP BY month, member_casual
+ORDER BY avg_ride_length DESC
+
+--WEEK BASED ANALYSIS
+--average
+--average ride length by week
+SELECT weekday, AVG(CAST((ended_at - started_at) AS float)) AS avg_ride_length
+FROM YDateNoDuplicates
+GROUP BY weekday
+ORDER BY avg_ride_length DESC
+
+--average ride length by week per member type
+SELECT weekday, member_casual, AVG(CAST((ended_at - started_at) AS float)) AS avg_ride_length
+FROM YDateNoDuplicates
+GROUP BY weekday, member_casual
+ORDER BY avg_ride_length DESC
+
+--number of:
+--rides per week
+SELECT DISTINCT weekday, COUNT(ride_id) AS no_of_rides
+FROM YDateNoDuplicates
+GROUP BY weekday
+ORDER BY weekday
+
+--riders by member type per week
+SELECT weekday, COUNT(ride_id) AS no_of_rides, member_casual
+FROM YDateNoDuplicates
+GROUP BY weekday, member_casual 
+ORDER BY no_of_rides DESC
+
